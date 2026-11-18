@@ -99,6 +99,14 @@ paths:
 - **상류 갱신은 `fluent-korean`에만 수동으로 반영한다**: 원본 저장소를 pull한 뒤 diff를 확인하고, 세부 동작 블록을 유지한 채 손으로 옮긴다. 모든 응답을 좌우하는 지침이므로 자동 덮어쓰기를 피한다. `fluent-korean-concise`는 직접 작성한 문서라 상류 diff를 그대로 적용하지 않고, 반영할 내용이 있는지 판단해서 손으로 옮긴다.
 - **`fluent-korean-concise`는 형식 지침이 충돌하면 Claude Code 기본 작성 규칙에 양보한다**: 서두에 그 우선순위 조항을 둔다. 하네스가 답변 형식 절을 주입하는지는 모델마다 다르다. Claude Code 2.1.280 기준으로 Opus 5와 Opus 5.5에는 `# Communicating with the user` 같은 답변 형식 절이 없어, 이 스타일이 답변 형식의 사실상 유일한 기준이다. Fable 5는 그 절 전체를 받고, Fable 5.1은 시작 전에 한 줄로 알리고 끝에 짧게 요약하라는 한 줄만 받는다(문서화되지 않은 동작으로, 바이너리를 분석해 확인했다). Fable 5.2는 2.1.323 기준으로 Opus 5.5처럼 답변 형식 절을 받지 않고, 대신 작업을 중간에 멈추지 말라는 `# Finishing work` 절과 메모리 작성 지침을 받는다(바이너리에 내장된 모델 목록의 `lean_prompt`, `fable_5_2_prompt_bundle` 값과 답변 형식 선택 코드로 확인했다). 이 선택은 서버가 내려 주는 모델별 기능 값으로 바뀔 수 있으며, 확인 시점의 로컬 캐시(`~/.claude.json`의 `clientDataCacheSlots`)에는 답변 형식을 바꾸는 값이 없었다. 그래서 응답 구성 절(결과 우선, 분량, 형식, 어조, 상태 공유)은 스타일 안에 유지하고, 양보 조항은 하네스 규칙이 있는 모델에서 충돌을 막는 장치로 남긴다. 화살표 권장과 헤더 전면 금지처럼 하네스와 정면으로 어긋나던 조항은 2.1.266 기준으로 제거·정렬했다.
 
+## 상태 표시줄
+
+`home/settings.json`의 `statusLine`이 `home/statusline-command.sh`를 실행한다. Claude Code에는 표시 항목을 고르는 내장 옵션이 없어, 화면에 나오는 내용은 모두 이 스크립트가 만든다. 첫 줄은 셸 PS1과 세션 제목을, 둘째 줄은 모델·컨텍스트·세션 누적 토큰·비용·사용 한도·피어 주소를 보여 주며 90자를 넘으면 비용 앞에서 줄을 나눈다.
+
+- 값은 세 곳에서 읽는다. 공식 status JSON(stdin), 세션 누적 토큰을 합산하는 transcript, 피어 주소를 찾는 세션 레지스트리(`~/.claude/sessions/*.json`의 `name`)다. 뒤의 둘은 문서화되지 않은 형식이다.
+- Claude Code가 업데이트되면 세 출처의 필드 이름과 형식이 그대로인지 확인한다. 레지스트리가 바뀌면 `@피어주소`만, transcript의 `message.usage`가 바뀌면 누적 토큰만 경고 없이 사라지거나 0으로 나온다.
+- 스크립트를 고친 뒤에는 샘플 JSON을 stdin으로 넣어 출력을 확인한다. 상태 표시줄이 비면 `claude --debug`로 원인을 본다.
+
 ## 세션 대시보드
 
 `/session-dashboard`는 Claude Code 세션의 목표·완료한 작업·현재 작업·남은 작업·주의 사항·결정 사항을 한국어 카드로 보여준다. `home/skills/session-dashboard/`에는 표준 Python 라이브러리만 사용하는 수집기와 로컬 화면이 들어 있다. 같은 `skills/` 폴더에 있는 `inspect-session/scripts/session_digest.py`가 필요하며, 저장소 사본에서도 두 스킬이 함께 있으면 실행할 수 있다. 설치 위치는 보통 `~/.claude/skills/session-dashboard`다.

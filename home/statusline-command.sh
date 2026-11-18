@@ -1,9 +1,11 @@
 #!/bin/bash
 # Claude Code statusline.
 #
-# Line 1 mirrors ~/.bashrc PS1 (plus the session name when known):
+# Line 1 mirrors ~/.bashrc PS1 (plus the session title when known):
 #   PS1='${debian_chroot:+($debian_chroot)}\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ '
 # Line 2: [model effort] bar % context │ used · out (session totals) │ cost
+#         │ rate limits (share remaining) │ @peer
+# A long line 2 splits before the cost (see wrap_at below).
 #
 # Two different token numbers, deliberately kept apart:
 #   - context (next to the bar) is one request's size. It drops on compact.
@@ -122,18 +124,18 @@ case "$cwd" in
 esac
 
 line1="${debian_chroot:+($debian_chroot)}\033[01;32m$(whoami)@$(hostname -s)\033[00m:\033[01;34m${path_display}\033[00m"
+[ -n "$sname" ] && line1="${line1} \033[02m(${sname})\033[00m"
 
-# Session name: the local session registry holds the addressable peer name —
-# what ListAgents shows and SendMessage targets (e.g. "dir-aa"; changes on
-# resume since it is keyed to the process). The JSON's session_name is only a
-# display title (/rename or AI-generated), not the address, so it is kept as
-# a fallback for when the undocumented registry misses.
+# Peer name: the local session registry holds the addressable name — what
+# ListAgents shows and SendMessage targets (e.g. "dir-5b"; may change on resume
+# since the file is keyed to the process). The JSON's session_name above is
+# only a display title, not the address. The registry is undocumented, so a
+# miss simply omits the peer tag.
+peer=""
 if [ "$sid" != "nosession" ]; then
   sfile=$(grep -ls "$sid" "$HOME/.claude/sessions/"*.json 2>/dev/null | head -1)
-  [ -n "$sfile" ] && rname=$(jq -r '.name // empty' "$sfile" 2>/dev/null)
+  [ -n "$sfile" ] && peer=$(jq -r '.name // empty' "$sfile" 2>/dev/null)
 fi
-[ -n "$rname" ] && sname=$rname
-[ -n "$sname" ] && line1="${line1} \033[02m(${sname})\033[00m"
 
 # --- line 2: session telemetry ---------------------------------------------
 sep="\033[02m│\033[00m"
@@ -147,8 +149,7 @@ if [ -n "$effort" ]; then
 else
   model_tag="\033[00;36m[${model}]\033[00m"
 fi
-
-# Green while there is room, amber past the halfway mark, red near the wall.
+# Green while there is room, amber past 70%, red near the wall.
 if   (( pct >= 90 )); then bar_color="00;31"
 elif (( pct >= 70 )); then bar_color="00;33"
 else                       bar_color="00;32"
@@ -169,13 +170,11 @@ tokens="$(human "$cum_used") \033[02mused\033[00m · $(human "$cum_out") \033[02
 usd() { printf '%d.%02d' $(( $1 / 1000000 )) $(( ($1 % 1000000) / 10000 )); }
 spend="\033[00;35m\$$(usd "$json_cost")\033[00m"
 
-line2="${model_tag} ${ctx} ${sep} ${tokens} ${sep} ${spend}"
-
 # Rendered only when the API reports subscription rate limits. Shown as the
 # share remaining (100 - used_percentage), rounded to whole percent and
 # clamped to 0..100: the API sends raw floats (e.g. 7.000000001), and
 # truncating the remainder would print 92% for 7.000000001% used.
-# Pure shell (no awk) for the same per-render reason as human() below.
+# Pure shell (no awk) for the same per-render reason as human() above.
 left_pct() {
   local v=0 f
   if [[ $1 =~ ^([0-9]+)(\.([0-9]+))?$ ]]; then
@@ -189,6 +188,26 @@ left_pct() {
 limits=""
 [ -n "$rl5" ] && limits="${limits} \033[02m5h\033[00m $(left_pct "$rl5")%"
 [ -n "$rl7" ] && limits="${limits} \033[02m7d\033[00m $(left_pct "$rl7")%"
-[ -n "$limits" ] && line2="${line2} ${sep}${limits} \033[02mleft\033[00m"
+limits=${limits# }
+peer_tag=""
+[ -n "$peer" ] && peer_tag="\033[01;33m@${peer}\033[00m"
+
+line2="${model_tag} ${ctx} ${sep} ${tokens}"
+tail="${spend}"
+[ -n "$limits" ] && tail="${tail} ${sep} ${limits}"
+[ -n "$peer_tag" ] && tail="${tail} ${sep} ${peer_tag}"
+
+# Fixed, conservative rule instead of probing the terminal width: when the
+# telemetry line would run past wrap_at characters (ANSI codes excluded), the
+# cost / limits / peer tail moves to a line of its own.
+wrap_at=90
+plain="${line2} ${sep} ${tail}"
+esc_re='\\033\[[0-9;]*m'
+while [[ $plain =~ $esc_re ]]; do plain=${plain//"${BASH_REMATCH[0]}"/}; done
+if (( ${#plain} > wrap_at )); then
+  line2="${line2}\n${tail}"
+else
+  line2="${line2} ${sep} ${tail}"
+fi
 
 printf "%b\n%b" "$line1" "$line2"
