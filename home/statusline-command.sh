@@ -197,10 +197,13 @@ tail="${spend}"
 [ -n "$limits" ] && tail="${tail} ${sep} ${limits}"
 [ -n "$peer_tag" ] && tail="${tail} ${sep} ${peer_tag}"
 
-# Fixed, conservative rule instead of probing the terminal width: when the
-# telemetry line would run past wrap_at characters (ANSI codes excluded), the
-# cost / limits / peer tail moves to a line of its own.
-wrap_at=90
+# When the telemetry line would run past the terminal width (ANSI codes
+# excluded), the cost / limits / peer tail moves to a line of its own. Claude
+# Code passes the width in COLUMNS (tput cols cannot see it); the margin leaves
+# room for notices drawn beside the status line, and without COLUMNS the limit
+# falls back to 90. Line 2 holds only single-width characters, so ${#plain} is
+# its display width and no external process is needed.
+wrap_at=$(( ${COLUMNS:-94} - 4 ))
 plain="${line2} ${sep} ${tail}"
 esc_re='\\033\[[0-9;]*m'
 while [[ $plain =~ $esc_re ]]; do plain=${plain//"${BASH_REMATCH[0]}"/}; done

@@ -101,7 +101,7 @@ paths:
 
 ## 상태 표시줄
 
-`home/settings.json`의 `statusLine`이 `home/statusline-command.sh`를 실행한다. Claude Code에는 표시 항목을 고르는 내장 옵션이 없어, 화면에 나오는 내용은 모두 이 스크립트가 만든다. 첫 줄은 셸 PS1과 세션 제목을, 둘째 줄은 모델·컨텍스트·세션 누적 토큰·비용·사용 한도·피어 주소를 보여 주며 90자를 넘으면 비용 앞에서 줄을 나눈다.
+`home/settings.json`의 `statusLine`이 `home/statusline-command.sh`를 실행한다. Claude Code에는 표시 항목을 고르는 내장 옵션이 없어, 화면에 나오는 내용은 모두 이 스크립트가 만든다. 첫 줄은 셸 PS1과 세션 제목을, 둘째 줄은 모델·컨텍스트·세션 누적 토큰·비용·사용 한도·피어 주소를 보여 주며, 터미널 폭(`COLUMNS`, 없으면 94)에서 4칸을 뺀 길이를 넘으면 비용 앞에서 줄을 나눈다.
 
 - 값은 세 곳에서 읽는다. 공식 status JSON(stdin), 세션 누적 토큰을 합산하는 transcript, 피어 주소를 찾는 세션 레지스트리(`~/.claude/sessions/*.json`의 `name`)다. 뒤의 둘은 문서화되지 않은 형식이다.
 - Claude Code가 업데이트되면 세 출처의 필드 이름과 형식이 그대로인지 확인한다. 레지스트리가 바뀌면 `@피어주소`만, transcript의 `message.usage`가 바뀌면 누적 토큰만 경고 없이 사라지거나 0으로 나온다.
